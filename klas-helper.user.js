@@ -49,6 +49,9 @@
 			}
 		}
 
+		// 로그인 세션 유지
+		setInterval(() => fetch('/'), 600000)
+
 		// KLAS Helper 사용 여부 문구 추가
 		document.querySelector('.navtxt').prepend(createElement('span', `
 			<span style="margin-right: 20px">
