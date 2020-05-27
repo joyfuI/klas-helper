@@ -49,132 +49,17 @@
 			}
 		}
 
-		// 로그인 세션 유지
-		setInterval(() => fetch('/'), 600000)
-
 		// KLAS Helper 사용 여부 문구 추가
 		document.querySelector('.navtxt').prepend(createElement('span', `
 			<span style="margin-right: 20px">
 				<a href="https://github.com/nbsp1221/klas-helper" target="_blank">KLAS Helper</a> 사용 중
 			</span>
 		`));
+
+		// 로그인 세션 유지
+		document.head.appendChild(createElement('script', 'setInterval(() => fetch("/"), 600000);'));
 	});
 })();
-
-// 태그에 삽입되지 않는 함수 목록
-// GM 기능을 사용하기 위해 유저 스크립트 내부의 함수가 필요
-const internalPathFunctions = {
-	// 온라인 강의 컨텐츠 보기
-	'/std/lis/evltn/OnlineCntntsStdPage.do': () => {
-		// MutationObserver 삽입
-		const observer = new MutationObserver(function (mutationList, observer) {
-			// table 태그에 저장한 고유 번호 파싱
-			const videoCodes = JSON.parse(mutationList[0].target.dataset.videoCodes);
-
-			// 이미 생성된 다운로드 버튼 제거
-			document.querySelectorAll('.btn-download').forEach(function (item) {
-				item.style.display = 'none';
-			});
-
-			// 동영상 XML 정보 획득
-			for (const videoInfo of videoCodes) {
-				GM.xmlHttpRequest({
-					method: 'GET',
-					url: 'https://kwcommons.kw.ac.kr/viewer/ssplayer/uniplayer_support/content.php?content_id=' + videoInfo.videoCode,
-					onload: function (response) {
-						const documentXML = response.responseXML;
-						const videoURLs = [];
-
-						// 분할된 동영상 등 다양한 상황 처리
-						try {
-							if (documentXML.getElementsByTagName('desktop').length > 0) {
-								videoURLs.push(documentXML.getElementsByTagName('media_uri')[0].innerHTML);
-							}
-							else {
-								const mediaURI = documentXML.getElementsByTagName('media_uri')[0].innerHTML;
-
-								for (const videoName of documentXML.getElementsByTagName('main_media')) {
-									videoURLs.push(mediaURI.replace('[MEDIA_FILE]', videoName.innerHTML));
-								}
-							}
-						}
-						catch (error) {
-							consoleError(error, {
-								title: 'Video Code',
-								content: videoInfo.videoCode
-							});
-						}
-
-						// 다운로드 버튼 렌더링
-						videoURLs.forEach((videoURL, i) => {
-							const tdList = document.getElementById('prjctList').querySelectorAll(`tbody > tr:nth-of-type(${videoInfo.index + 1}) > td`);
-							let tdElement = tdList[tdList.length - 1];
-							tdElement = tdElement.className === '' ? tdElement : tdList[tdList.length - 2];
-
-							tdElement.appendChild(createElement('div', `
-								<a href="${videoURL}" target="_blank" style="display: block; margin-top: 10px">
-									<button type="button" class="btn2 btn-gray btn-download">동영상 받기 #${i + 1}</button>
-								</a>
-							`));
-						});
-					}
-				});
-			}
-		});
-
-		// MutationObserver 감지 시작
-		observer.observe(document.querySelector('#prjctList'), { attributes: true });
-	},
-
-	// 온라인 강의 화면
-	'/spv/lis/lctre/viewer/LctreCntntsViewSpvPage.do': () => {
-		// 온라인 강의 동영상 다운로드
-		const downloadVideo = (videoCode) => {
-			GM.xmlHttpRequest({
-				method: 'GET',
-				url: 'https://kwcommons.kw.ac.kr/viewer/ssplayer/uniplayer_support/content.php?content_id=' + videoCode,
-				onload: function (response) {
-					const documentXML = response.responseXML;
-					const videoURLs = [];
-
-					// 분할된 동영상 등 다양한 상황 처리
-					if (documentXML.getElementsByTagName('desktop').length > 0) {
-						videoURLs.push(documentXML.getElementsByTagName('media_uri')[0].innerHTML)
-					}
-					else {
-						const mediaURI = documentXML.getElementsByTagName('media_uri')[0].innerHTML;
-
-						for (const videoName of documentXML.getElementsByTagName('main_media')) {
-							videoURLs.push(mediaURI.replace('[MEDIA_FILE]', videoName.innerHTML));
-						}
-					}
-
-					// 다운로드 버튼 렌더링
-					for (let i = 0; i < videoURLs.length; i++) {
-						const labelElement = document.createElement('label');
-						labelElement.innerHTML = `<a href="${videoURLs[i]}" target="_blank" style="background-color: brown; color: white; font-weight: bold; padding: 10px; text-decoration: none">동영상 받기 #${i + 1}</a>`;
-						document.querySelector('.mvtopba > label:last-of-type').after(labelElement);
-					}
-				}
-			});
-		};
-
-		// 고유 번호를 받을 때까지 대기
-		const waitTimer = setInterval(() => {
-			const videoCode = document.body.getAttribute('data-video-code');
-
-			if (videoCode) {
-				clearInterval(waitTimer);
-				downloadVideo(videoCode);
-			}
-		}, 100);
-
-		// 일정 시간이 지날 경우 타이머 해제
-		setTimeout(() => {
-			clearInterval(waitTimer);
-		}, 10000);
-	}
-};
 
 // 태그에 삽입되는 함수 목록
 // 다른 확장 프로그램을 지원하기 위해 태그 삽입이 필요
@@ -961,6 +846,121 @@ const externalPathFunctions = {
 		// 온라인 강의 고유 번호 파싱
 		const videoURL = chkOpen.toString().split('https://kwcommons.kw.ac.kr/em/')[1].split('"')[0];
 		document.body.setAttribute('data-video-code', videoURL);
+	}
+};
+
+// 태그에 삽입되지 않는 함수 목록
+// GM 기능을 사용하기 위해 유저 스크립트 내부의 함수가 필요
+const internalPathFunctions = {
+	// 온라인 강의 컨텐츠 보기
+	'/std/lis/evltn/OnlineCntntsStdPage.do': () => {
+		// MutationObserver 삽입
+		const observer = new MutationObserver(function (mutationList, observer) {
+			// table 태그에 저장한 고유 번호 파싱
+			const videoCodes = JSON.parse(mutationList[0].target.dataset.videoCodes);
+
+			// 이미 생성된 다운로드 버튼 제거
+			document.querySelectorAll('.btn-download').forEach(function (item) {
+				item.style.display = 'none';
+			});
+
+			// 동영상 XML 정보 획득
+			for (const videoInfo of videoCodes) {
+				GM.xmlHttpRequest({
+					method: 'GET',
+					url: 'https://kwcommons.kw.ac.kr/viewer/ssplayer/uniplayer_support/content.php?content_id=' + videoInfo.videoCode,
+					onload: function (response) {
+						const documentXML = response.responseXML;
+						const videoURLs = [];
+
+						// 분할된 동영상 등 다양한 상황 처리
+						try {
+							if (documentXML.getElementsByTagName('desktop').length > 0) {
+								videoURLs.push(documentXML.getElementsByTagName('media_uri')[0].innerHTML);
+							}
+							else {
+								const mediaURI = documentXML.getElementsByTagName('media_uri')[0].innerHTML;
+
+								for (const videoName of documentXML.getElementsByTagName('main_media')) {
+									videoURLs.push(mediaURI.replace('[MEDIA_FILE]', videoName.innerHTML));
+								}
+							}
+						}
+						catch (error) {
+							consoleError(error, {
+								title: 'Video Code',
+								content: videoInfo.videoCode
+							});
+						}
+
+						// 다운로드 버튼 렌더링
+						videoURLs.forEach((videoURL, i) => {
+							const tdList = document.getElementById('prjctList').querySelectorAll(`tbody > tr:nth-of-type(${videoInfo.index + 1}) > td`);
+							let tdElement = tdList[tdList.length - 1];
+							tdElement = tdElement.className === '' ? tdElement : tdList[tdList.length - 2];
+
+							tdElement.appendChild(createElement('div', `
+								<a href="${videoURL}" target="_blank" style="display: block; margin-top: 10px">
+									<button type="button" class="btn2 btn-gray btn-download">동영상 받기 #${i + 1}</button>
+								</a>
+							`));
+						});
+					}
+				});
+			}
+		});
+
+		// MutationObserver 감지 시작
+		observer.observe(document.querySelector('#prjctList'), { attributes: true });
+	},
+
+	// 온라인 강의 화면
+	'/spv/lis/lctre/viewer/LctreCntntsViewSpvPage.do': () => {
+		// 온라인 강의 동영상 다운로드
+		const downloadVideo = (videoCode) => {
+			GM.xmlHttpRequest({
+				method: 'GET',
+				url: 'https://kwcommons.kw.ac.kr/viewer/ssplayer/uniplayer_support/content.php?content_id=' + videoCode,
+				onload: function (response) {
+					const documentXML = response.responseXML;
+					const videoURLs = [];
+
+					// 분할된 동영상 등 다양한 상황 처리
+					if (documentXML.getElementsByTagName('desktop').length > 0) {
+						videoURLs.push(documentXML.getElementsByTagName('media_uri')[0].innerHTML)
+					}
+					else {
+						const mediaURI = documentXML.getElementsByTagName('media_uri')[0].innerHTML;
+
+						for (const videoName of documentXML.getElementsByTagName('main_media')) {
+							videoURLs.push(mediaURI.replace('[MEDIA_FILE]', videoName.innerHTML));
+						}
+					}
+
+					// 다운로드 버튼 렌더링
+					for (let i = 0; i < videoURLs.length; i++) {
+						const labelElement = document.createElement('label');
+						labelElement.innerHTML = `<a href="${videoURLs[i]}" target="_blank" style="background-color: brown; color: white; font-weight: bold; padding: 10px; text-decoration: none">동영상 받기 #${i + 1}</a>`;
+						document.querySelector('.mvtopba > label:last-of-type').after(labelElement);
+					}
+				}
+			});
+		};
+
+		// 고유 번호를 받을 때까지 대기
+		const waitTimer = setInterval(() => {
+			const videoCode = document.body.getAttribute('data-video-code');
+
+			if (videoCode) {
+				clearInterval(waitTimer);
+				downloadVideo(videoCode);
+			}
+		}, 100);
+
+		// 일정 시간이 지날 경우 타이머 해제
+		setTimeout(() => {
+			clearInterval(waitTimer);
+		}, 10000);
 	}
 };
 
