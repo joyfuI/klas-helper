@@ -1,61 +1,51 @@
-// Element 생성
-function createElement(elementName, htmlCode) {
-	const newElement = document.createElement(elementName);
-	newElement.innerHTML = htmlCode;
-	return newElement;
-}
+// ==UserScript==
+// @name		KLAS Helper
+// @namespace	https://joyfui.wo.tc/
+// @version		2.1.1
+// @author		joyfuI
+// @description	광운대학교 KLAS 사이트에 편리한 기능을 추가할 수 있는 유저 스크립트
+// @homepageURL	https://github.com/joyfuI/klas-helper
+// @downloadURL	https://raw.githubusercontent.com/joyfuI/klas-helper/custom/klas-helper.user.js
+// @include		https://klas.kw.ac.kr/*
+// @run-at		document-end
+// @grant		GM.xmlHttpRequest
+// ==/UserScript==
 
-// 새 창으로 열기
-function openLinkNewWindow(url, urlDatas = null, features = null) {
-	let completeURL = url;
-	let completeFeatures = '';
-
-	if (urlDatas) {
-		completeURL += '?';
-		for (const name in urlDatas) completeURL += `${name}=${urlDatas[name]}&`;
-		completeURL = completeURL.substring(0, completeURL.length - 1);
-	}
-
-	if (features) {
-		for (const name in features) completeFeatures += `${name}=${features[name]},`;
-		completeFeatures = completeFeatures.substring(0, completeFeatures.length - 1);
-	}
-
-	window.open(completeURL, '', completeFeatures);
-}
-
-// 소수점 버림 함수
-function floorFixed(number, decimalPlace = 2) {
-	const pow10 = 10 ** decimalPlace;
-	return (Math.floor(number * pow10) / pow10).toFixed(decimalPlace);
-}
-
-// 콘솔에 오류 띄우기
-function consoleError(error, info) {
-	console.error(`[KLAS Helper Error]\n${info.title}: ${info.content}\nMessage: ${error.message}`);
-}
-
-// 메인 실행 함수
 (function () {
-	'use strict';
+	"use strict";
 
 	const externalLibs = [
 		'https://cdn.jsdelivr.net/npm/chart.js@2.9.3/dist/Chart.min.js'
 	];
 
 	// 외부 라이브러리 삽입
-	for (const src of externalLibs) {
-		const scriptElement = document.createElement('script');
-		scriptElement.setAttribute('src', src);
-		document.head.appendChild(scriptElement);
+	for (let i of externalLibs) {
+		let tag = document.createElement('script');
+		tag.src = i;
+		document.head.appendChild(tag);
 	}
 
+	// 기본 함수 삽입
+	document.head.appendChild(createElement('script',
+		createElement.toString() +
+		openLinkNewWindow.toString() +
+		floorFixed.toString() +
+		consoleError.toString()
+	));
+
 	// window.onload 설정
-	window.addEventListener('load', () => {
-		// externalPathFunctions 함수 실행
-		for (const path in externalPathFunctions) {
+	addEventListener('load', () => {
+		// externalPathFunctions 함수 삽입
+		for (let path in externalPathFunctions) {
 			if (path === location.pathname) {
-				externalPathFunctions[path]();
+				document.head.appendChild(createElement('script', '(' + externalPathFunctions[path].toString() + ')();'));
+			}
+		}
+
+		// internalPathFunctions 함수 실행
+		for (let path in internalPathFunctions) {
+			if (path === location.pathname) {
+				internalPathFunctions[path]();
 			}
 		}
 
@@ -68,32 +58,331 @@ function consoleError(error, info) {
 	});
 })();
 
+// 태그에 삽입되지 않는 함수 목록
+// GM 기능을 사용하기 위해 유저 스크립트 내부의 함수가 필요
+const internalPathFunctions = {
+	// 온라인 강의 컨텐츠 보기
+	'/std/lis/evltn/OnlineCntntsStdPage.do': () => {
+		// MutationObserver 삽입
+		const observer = new MutationObserver(function (mutationList, observer) {
+			// table 태그에 저장한 고유 번호 파싱
+			const videoCodes = JSON.parse(mutationList[0].target.dataset.videoCodes);
+
+			// 이미 생성된 다운로드 버튼 제거
+			document.querySelectorAll('.btn-download').forEach(function (item) {
+				item.style.display = 'none';
+			});
+
+			// 동영상 XML 정보 획득
+			for (const videoInfo of videoCodes) {
+				GM.xmlHttpRequest({
+					method: 'GET',
+					url: 'https://kwcommons.kw.ac.kr/viewer/ssplayer/uniplayer_support/content.php?content_id=' + videoInfo.videoCode,
+					onload: function (response) {
+						const documentXML = response.responseXML;
+						const videoURLs = [];
+
+						// 분할된 동영상 등 다양한 상황 처리
+						try {
+							if (documentXML.getElementsByTagName('desktop').length > 0) {
+								videoURLs.push(documentXML.getElementsByTagName('media_uri')[0].innerHTML);
+							}
+							else {
+								const mediaURI = documentXML.getElementsByTagName('media_uri')[0].innerHTML;
+
+								for (const videoName of documentXML.getElementsByTagName('main_media')) {
+									videoURLs.push(mediaURI.replace('[MEDIA_FILE]', videoName.innerHTML));
+								}
+							}
+						}
+						catch (error) {
+							consoleError(error, {
+								title: 'Video Code',
+								content: videoInfo.videoCode
+							});
+						}
+
+						// 다운로드 버튼 렌더링
+						videoURLs.forEach((videoURL, i) => {
+							const tdList = document.getElementById('prjctList').querySelectorAll(`tbody > tr:nth-of-type(${videoInfo.index + 1}) > td`);
+							let tdElement = tdList[tdList.length - 1];
+							tdElement = tdElement.className === '' ? tdElement : tdList[tdList.length - 2];
+
+							tdElement.appendChild(createElement('div', `
+								<a href="${videoURL}" target="_blank" style="display: block; margin-top: 10px">
+									<button type="button" class="btn2 btn-gray btn-download">동영상 받기 #${i + 1}</button>
+								</a>
+							`));
+						});
+					}
+				});
+			}
+		});
+
+		// MutationObserver 감지 시작
+		observer.observe(document.querySelector('#prjctList'), { attributes: true });
+	},
+
+	// 온라인 강의 화면
+	'/spv/lis/lctre/viewer/LctreCntntsViewSpvPage.do': () => {
+		// 온라인 강의 동영상 다운로드
+		const downloadVideo = (videoCode) => {
+			GM.xmlHttpRequest({
+				method: 'GET',
+				url: 'https://kwcommons.kw.ac.kr/viewer/ssplayer/uniplayer_support/content.php?content_id=' + videoCode,
+				onload: function (response) {
+					const documentXML = response.responseXML;
+					const videoURLs = [];
+
+					// 분할된 동영상 등 다양한 상황 처리
+					if (documentXML.getElementsByTagName('desktop').length > 0) {
+						videoURLs.push(documentXML.getElementsByTagName('media_uri')[0].innerHTML)
+					}
+					else {
+						const mediaURI = documentXML.getElementsByTagName('media_uri')[0].innerHTML;
+
+						for (const videoName of documentXML.getElementsByTagName('main_media')) {
+							videoURLs.push(mediaURI.replace('[MEDIA_FILE]', videoName.innerHTML));
+						}
+					}
+
+					// 다운로드 버튼 렌더링
+					for (let i = 0; i < videoURLs.length; i++) {
+						const labelElement = document.createElement('label');
+						labelElement.innerHTML = `<a href="${videoURLs[i]}" target="_blank" style="background-color: brown; color: white; font-weight: bold; padding: 10px; text-decoration: none">동영상 받기 #${i + 1}</a>`;
+						document.querySelector('.mvtopba > label:last-of-type').after(labelElement);
+					}
+				}
+			});
+		};
+
+		// 고유 번호를 받을 때까지 대기
+		const waitTimer = setInterval(() => {
+			const videoCode = document.body.getAttribute('data-video-code');
+
+			if (videoCode) {
+				clearInterval(waitTimer);
+				downloadVideo(videoCode);
+			}
+		}, 100);
+
+		// 일정 시간이 지날 경우 타이머 해제
+		setTimeout(() => {
+			clearInterval(waitTimer);
+		}, 10000);
+	}
+};
+
 // 태그에 삽입되는 함수 목록
 // 다른 확장 프로그램을 지원하기 위해 태그 삽입이 필요
 const externalPathFunctions = {
+	// 메인 페이지
+	'/std/cmn/frame/Frame.do': () => {
+		// 수강 과목 현황
+		const showLimit = async () => {
+			const promises = [];
+			const limitInfo = {};
+
+			// 현재 수강 중인 과목 얻기
+			for (const subjectInfo of appModule.atnlcSbjectList) {
+				limitInfo[subjectInfo.subj] = {
+					subjectName: subjectInfo.subjNm,
+					lecture: {
+						leftTime: Infinity,
+						count: 0
+					},
+					homework: {
+						leftTime: Infinity,
+						count: 0
+					}
+				};
+
+				// 온라인 강의를 가져올 주소 설정
+				promises.push(axios.post('/std/lis/evltn/SelectOnlineCntntsStdList.do', {
+					selectSubj: subjectInfo.subj,
+					selectYearhakgi: subjectInfo.yearhakgi,
+					selectChangeYn: 'Y'
+				}));
+
+				// 과제를 가져올 주소 설정
+				promises.push(axios.post('/std/lis/evltn/TaskStdList.do', {
+					selectSubj: subjectInfo.subj,
+					selectYearhakgi: subjectInfo.yearhakgi,
+					selectChangeYn: 'Y'
+				}));
+			}
+
+			// 온라인 강의 파싱 함수
+			const getLecture = (subjectCode, data) => {
+				const nowDate = new Date();
+
+				for (const lectureInfo of data) {
+					if (lectureInfo.evltnSe !== 'lesson' || lectureInfo.prog === 100) {
+						continue;
+					}
+
+					const endDate = new Date(lectureInfo.endDate + ':59');
+					const gapHours = Math.floor((endDate - nowDate) / 3600000);
+
+					if (gapHours < 0) {
+						continue;
+					}
+
+					if (limitInfo[subjectCode].lecture.leftTime > gapHours) {
+						limitInfo[subjectCode].lecture.leftTime = gapHours;
+						limitInfo[subjectCode].lecture.count = 1;
+					}
+					else if (limitInfo[subjectCode].lecture.leftTime === gapHours) {
+						limitInfo[subjectCode].lecture.count++;
+					}
+				}
+			};
+
+			// 과제 파싱 함수
+			const getHomework = (subjectCode, data) => {
+				const nowDate = new Date();
+
+				for (const homeworkInfo of data) {
+					if (homeworkInfo.submityn === 'Y') {
+						continue;
+					}
+
+					const endDate = new Date(homeworkInfo.expiredate + ':59');
+					let gapHours = Math.floor((endDate - nowDate) / 3600000);
+
+					if (gapHours < 0) {
+						if (!homeworkInfo.reexpiredate) {
+							continue;
+						}
+
+						// 추가 제출 기한
+						const reEndDate = new Date(homeworkInfo.reexpiredate + ':59');
+						gapHours = Math.floor((reEndDate - nowDate) / 3600000);
+
+						if (gapHours < 0) {
+							continue;
+						}
+					}
+
+					if (limitInfo[subjectCode].homework.leftTime > gapHours) {
+						limitInfo[subjectCode].homework.leftTime = gapHours;
+						limitInfo[subjectCode].homework.count = 1;
+					}
+					else if (limitInfo[subjectCode].homework.leftTime === gapHours) {
+						limitInfo[subjectCode].homework.count++;
+					}
+				}
+			};
+
+			// 해당 과목의 온라인 강의와 과제 정보 얻기
+			await axios.all(promises).then((results) => {
+				for (const response of results) {
+					const subjectCode = JSON.parse(response.config.data).selectSubj;
+
+					switch (response.config.url) {
+						case '/std/lis/evltn/SelectOnlineCntntsStdList.do':
+							getLecture(subjectCode, response.data);
+							break;
+
+						case '/std/lis/evltn/TaskStdList.do':
+							getHomework(subjectCode, response.data);
+							break;
+					}
+				}
+			});
+
+			// 마감이 빠른 순으로 정렬
+			const sortedLimitInfo = Object.values(limitInfo).sort((left, right) => {
+				const minLeft = Math.min(left.lecture.leftTime, left.homework.leftTime);
+				const minRight = Math.min(right.lecture.leftTime, right.homework.leftTime);
+
+				if (minLeft === minRight) {
+					return (right.lecture.count + right.homework.count) - (left.lecture.count + right.homework.count);
+				}
+				else {
+					return minLeft - minRight;
+				}
+			});
+
+			// 내용 생성 함수
+			const createContent = (leftTime, itemName, itemCount) => {
+				if (leftTime === Infinity) {
+					return `<td style="color: green">남아있는 ${itemName}가 없습니다! 😄</td>`;
+				}
+
+				const leftDay = Math.floor(leftTime / 24);
+				const leftHours = leftTime % 24;
+
+				if (leftDay === 0) {
+					if (leftHours === 0) {
+						return `<td style="color: red; font-weight: bold">곧 마감인 ${itemName}가 ${itemCount}개 있습니다. 😱</strong></td>`;
+					}
+					else {
+						return `<td style="color: red; font-weight: bolder"><strong>${leftHours}시간 후</strong> 마감인 ${itemName}가 <strong>${itemCount}개</strong> 있습니다. 😭</td>`;
+					}
+				}
+				else if (leftDay === 1) {
+					return `<td style="color: red"><strong>1일 후</strong> 마감인 ${itemName}가 <strong>${itemCount}개</strong> 있습니다. 😥</td>`;
+				}
+				else {
+					return `<td><strong>${leftDay}일 후</strong> 마감인 ${itemName}가 <strong>${itemCount}개</strong> 있습니다.</td>`;
+				}
+			};
+
+			// HTML 코드 생성
+			const trCode = sortedLimitInfo.reduce((acc, cur) => {
+				acc += `
+					<tr style="border-bottom: 1px solid #DCE3EB; height: 30px">
+						<td style="font-weight: bold">${cur.subjectName}</td>
+						${createContent(cur.lecture.leftTime, '강의', cur.lecture.count)}
+						${createContent(cur.homework.leftTime, '과제', cur.homework.count)}
+					</tr>
+				`;
+
+				return acc;
+			}, '');
+
+			// 렌더링
+			document.querySelector('.subjectbox').prepend(createElement('div', `
+				<div class="card card-body mb-4">
+					<div class="bodtitle">
+						<p class="title-text">수강 과목 현황</p>
+					</div>
+					<table>
+						<colgroup>
+							<col width="30%">
+							<col width="35%">
+							<col width="35%">
+						</colgroup>
+						<thead>
+							<tr style="border-bottom: 1px solid #DCE3EB; font-weight: bold; height: 30px">
+								<td></td>
+								<td>온라인 강의</td>
+								<td>과제</td>
+							</tr>
+						</thead>
+						<tbody>
+							${trCode}
+						</tbody>
+					</table>
+				</div>
+			`));
+		};
+
+		// 모든 정보를 불러올 때까지 대기
+		const waitTimer = setInterval(() => {
+			if (appModule && appModule.atnlcSbjectList.length > 0) {
+				clearInterval(waitTimer);
+				showLimit();
+			}
+		}, 100);
+	},
+
 	// 강의 계획서 조회 - 학부
 	'/std/cps/atnlc/LectrePlanStdPage.do': () => {
-		let waitSearch = false;
-
 		// 인증 코드 개선 및 메시지 제거
 		appModule.getSearch = function () {
 			this.selectYearHakgi = this.selectYear + ',' + this.selecthakgi;
-
-			// 서버 부하를 방지하기 위해 모든 강의 계획서 검색 방지
-			if (this.selectRadio === 'all' && this.selectText === '' && this.selectProfsr === '' && this.cmmnGamok === '' && this.selecthakgwa === '') {
-				alert('과목명 또는 담당 교수를 입력하지 않은 경우 반드시 과목이나 학과를 선택하셔야 합니다.');
-				return false;
-			}
-
-			// 서버 부하를 방지하기 위해 2초간 검색 방지
-			if (waitSearch) {
-				alert('서버 부하 문제를 방지하기 위해 2초 뒤에 검색이 가능합니다.');
-				return false;
-			}
-
-			// 2초 타이머
-			waitSearch = true;
-			setTimeout(() => { waitSearch = false; }, 2000);
 
 			axios.post('LectrePlanStdList.do', this.$data).then(function (response) {
 				this.list = response.data;
@@ -102,8 +391,12 @@ const externalPathFunctions = {
 
 		// 강의 계획서 새 창으로 열기
 		appModule.goLectrePlan = function (item) {
-			if (item.closeOpt === 'Y') { alert('폐강된 강의입니다.'); return false; }
-			if (!item.summary) { alert('강의 계획서 정보가 없습니다.'); return false; }
+			if (item.closeOpt === 'Y') {
+				alert('폐강된 강의입니다.'); return false;
+			}
+			if (!item.summary) {
+				alert('강의 계획서 정보가 없습니다.'); return false;
+			}
 
 			openLinkNewWindow(
 				'popup/LectrePlanStdView.do',
@@ -131,6 +424,7 @@ const externalPathFunctions = {
 			}
 		});
 	},
+
 	// 강의 계획서 조회 - 대학원
 	'/std/cps/atnlc/LectrePlanGdhlStdPage.do': () => {
 		// 인증 코드 개선 및 메시지 제거
@@ -155,6 +449,7 @@ const externalPathFunctions = {
 			}
 		});
 	},
+
 	// 수강 및 성적 조회
 	'/std/cps/inqire/AtnlcScreStdPage.do': () => {
 		const scoreTimer = setInterval(() => {
@@ -357,6 +652,7 @@ const externalPathFunctions = {
 			clearInterval(scoreTimer);
 		}, 100);
 	},
+
 	// 석차 조회
 	'/std/cps/inqire/StandStdPage.do': () => {
 		// 재학했던 학기의 모든 석차 조회
@@ -417,6 +713,7 @@ const externalPathFunctions = {
 			}, 500);
 		});
 	},
+
 	// 강의 종합
 	'/std/lis/evltn/LctrumHomeStdPage.do': () => {
 		// 인증 팝업 무시
@@ -433,10 +730,37 @@ const externalPathFunctions = {
 				}.bind(this));
 		};
 
-		// 강의 숨기기 버튼 생성
+		// 2분 쿨타임 제거, 강의 숨기기 버튼 생성
 		$("p:contains('온라인 강의리스트')").append(`
-			<button type="button" class="btn2 btn-gray btn-clean">강의 숨기기 On/Off</button>
+			<button type="button" class="btn2 btn-learn btn-cooltime">2분 쿨타임 제거</button>
+			<button type="button" class="btn2 btn-gray btn-clean">강의 숨기기 On / Off</button>
 		`);
+
+		// 2분 쿨타임 제거 버튼에 이벤트 설정
+		$('.btn-cooltime').click(() => {
+			appModule.getLrnSttus = function (param) {
+				let self = this;
+				axios.post('/std/lis/evltn/SelectLrnSttusStd.do', self.$data).then(function (response) {
+					self.lrnSttus = response.data;
+
+					if (response.data === 'Y' || response.data === 'N') {
+						if (ios) {
+							$('#viewForm').prop('target', '_blank').prop('action', '/spv/lis/lctre/viewer/LctreCntntsViewSpvPage.do').submit();
+						}
+						else {
+							let popup = window.open('', 'previewPopup', 'resizable=yes, scrollbars=yes, top=100px, left=100px, height=' + self.height + 'px, width= ' + self.width + 'px');
+							$('#viewForm').prop('target', 'previewPopup').prop('action', '/spv/lis/lctre/viewer/LctreCntntsViewSpvPage.do').submit().prop('target', '');
+							popup.focus();
+						}
+					}
+					else if (response.request.responseURL.includes('LoginForm.do')){
+						linkUrl(response.request.responseURL);
+					}
+				}.bind(this));
+			};
+
+			alert('2분 쿨타임이 제거되었습니다.');
+		});
 
 		// 강의 숨기기 버튼에 이벤트 설정
 		$('.btn-clean').click(() => {
@@ -463,6 +787,7 @@ const externalPathFunctions = {
 			$('.btn-green').toggleClass('btn-green').toggleClass('btn-gray');
 		});
 	},
+
 	// 온라인 강의 컨텐츠 보기
 	'/std/lis/evltn/OnlineCntntsStdPage.do': () => {
 		// 강의 숨기기 기능에 맞도록 표 레이아웃 구현 방식 수정
@@ -471,7 +796,7 @@ const externalPathFunctions = {
 				const weekRows = $('.weekNo-' + i);
 				const moduleTitleRows = $('.moduletitle-' + i);
 				const totalTimeRows = $('.totalTime-' + i);
-				
+
 				weekRows.removeAttr('rowspan').show();
 				moduleTitleRows.removeAttr('rowspan').show();
 				totalTimeRows.removeAttr('rowspan').show();
@@ -496,9 +821,6 @@ const externalPathFunctions = {
 		// 안내 문구 및 새로운 기능 렌더링
 		document.querySelector('#appModule > table:not(#prjctList)').after(createElement('div', `
 			<div id="new-features" style="border: 1px solid #D3D0D0; border-radius: 5px; margin-top: 30px; padding: 10px">
-				<div>온라인 강의 다운로드는 '보기' 버튼을 누르면 나오는 강의 화면 페이지에서 이용하실 수 있습니다.</div>
-				<div style="color: red">온라인 강의 시 사용되는 강의 내용을 공유 및 배포하는 것은 저작권을 침해하는 행위이므로 꼭 개인 소장 용도로만 이용해 주시기 바랍니다.</div>
-				<div style="font-weight: bold; margin-top: 10px">추가된 기능</div>
 				<div>- 2분 쿨타임 제거: 2분 쿨타임을 제거할 수 있습니다. 단, 동시에 여러 콘텐츠 학습을 하지 않도록 주의해 주세요.</div>
 				<div>- 강의 숨기기: 진도율 100%인 강의를 숨길 수 있습니다.</div>
 				<div style="margin-top: 20px">
@@ -568,7 +890,69 @@ const externalPathFunctions = {
 					appModule.goViewCntnts(grcode, subj, year, hakgi, bunban, module, lesson, oid, starting, contentsType, weeklyseq, weeklysubseq, width, height, today, sdate, edate, ptype, totalTime, prog);
 				}.bind(this));
 		};
+
+		// 온라인 강의 고유 번호 파싱
+		appModule.$watch('list', function (watchValue) {
+			const videoCodes = [];
+			let videoCount = 0;
+
+			for (let i = 0; i < watchValue.length; i++) {
+				videoCount += watchValue[i].hasOwnProperty('starting');
+			}
+
+			for (let i = 0; i < watchValue.length; i++) {
+				const videoInfo = watchValue[i];
+				let	videoCode = '';
+
+				if (!videoInfo.hasOwnProperty('starting')) {
+					continue;
+				}
+
+				// 예외인 고유 번호는 직접 파싱해서 처리
+				if (videoInfo.starting === null || videoInfo.starting === 'default.htm') {
+					const postData = [];
+					for (const key in videoInfo) postData.push(`${key}=${videoInfo[key]}`);
+
+					axios.post('/spv/lis/lctre/viewer/LctreCntntsViewSpvPage.do', postData.join('&')).then(function (response) {
+						if (response.data.indexOf('kwcommons.kw.ac.kr/em/') === -1) {
+							videoCode = undefined;
+						}
+						else {
+							videoCode = response.data.split('kwcommons.kw.ac.kr/em/')[1].split('"')[0];
+						}
+					});
+				}
+				else {
+					videoCode = videoInfo.starting.split('/');
+					videoCode = videoCode[videoCode.length - 1];
+				}
+
+				const syncTimer = setInterval(() => {
+					if (videoCode === undefined) {
+						videoCount--;
+						clearInterval(syncTimer);
+					}
+					else if (videoCode !== '') {
+						videoCodes.push({ index: i, videoCode });
+						clearInterval(syncTimer);
+					}
+				}, 100);
+			}
+
+			// table 태그에 고유 번호 저장
+			const syncTimer = setInterval(() => {
+				if (videoCount === videoCodes.length) {
+					document.querySelector('#prjctList').setAttribute('data-video-codes', JSON.stringify(videoCodes));
+					clearInterval(syncTimer);
+				}
+			}, 100);
+		});
+
+		// 표 디자인 수정
+		document.querySelector('#prjctList > colgroup > col:nth-of-type(6)').setAttribute('width', '5%');
+		document.querySelector('#prjctList > colgroup > col:nth-of-type(7)').setAttribute('width', '15%');
 	},
+
 	// 온라인 강의 화면
 	'/spv/lis/lctre/viewer/LctreCntntsViewSpvPage.do': () => {
 		// 온라인 강의 고유 번호 파싱
@@ -576,3 +960,44 @@ const externalPathFunctions = {
 		document.body.setAttribute('data-video-code', videoURL);
 	}
 };
+
+// Element 생성
+function createElement(elementName, htmlCode) {
+	let newElement = document.createElement(elementName);
+	newElement.innerHTML = htmlCode;
+	return newElement;
+}
+
+// 새 창으로 열기
+function openLinkNewWindow(url, urlDatas = null, features = null) {
+	let completeURL = url;
+	let completeFeatures = '';
+
+	if (urlDatas) {
+		completeURL += '?';
+		for (let name in urlDatas) {
+			completeURL += `${name}=${urlDatas[name]}&`;
+		}
+		completeURL = completeURL.substring(0, completeURL.length - 1);
+	}
+
+	if (features) {
+		for (let name in features) {
+			completeFeatures += `${name}=${features[name]},`;
+		}
+		completeFeatures = completeFeatures.substring(0, completeFeatures.length - 1);
+	}
+
+	open(completeURL, '_blank', completeFeatures);
+}
+
+// 소수점 버림 함수
+function floorFixed(number, decimalPlace = 2) {
+	let pow10 = 10 ** decimalPlace;
+	return (Math.floor(number * pow10) / pow10).toFixed(decimalPlace);
+}
+
+// 콘솔에 오류 띄우기
+function consoleError(error, info) {
+	console.error(`[KLAS Helper Error]\n${info.title}: ${info.content}\nMessage: ${error.message}`);
+}
