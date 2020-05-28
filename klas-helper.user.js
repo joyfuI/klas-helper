@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name		KLAS Helper custom
 // @namespace	https://joyfui.wo.tc/
-// @version		1.0
+// @version		1.1
 // @author		joyfuI
 // @description	KLAS Helper에 개인적으로 덧붙인 유저 스크립트 (KLAS Helper 필요)
 // @homepageURL	https://github.com/joyfuI/klas-helper
@@ -77,13 +77,11 @@ const externalPathFunctions = {
 					axios.post('/spv/lis/lctre/viewer/LctreCntntsViewSpvPage.do', postData.join('&')).then(function (response) {
 						if (response.data.indexOf('kwcommons.kw.ac.kr/em/') === -1) {
 							videoCode = undefined;
-						}
-						else {
+						} else {
 							videoCode = response.data.split('kwcommons.kw.ac.kr/em/')[1].split('"')[0];
 						}
 					});
-				}
-				else {
+				} else {
 					videoCode = videoInfo.starting.split('/');
 					videoCode = videoCode[videoCode.length - 1];
 				}
@@ -92,8 +90,7 @@ const externalPathFunctions = {
 					if (videoCode === undefined) {
 						videoCount--;
 						clearInterval(syncTimer);
-					}
-					else if (videoCode !== '') {
+					} else if (videoCode !== '') {
 						videoCodes.push({ index: i, videoCode });
 						clearInterval(syncTimer);
 					}
@@ -143,20 +140,15 @@ const internalPathFunctions = {
 						try {
 							if (documentXML.getElementsByTagName('desktop').length > 0) {
 								videoURLs.push(documentXML.getElementsByTagName('media_uri')[0].innerHTML);
-							}
-							else {
+							} else {
 								const mediaURI = documentXML.getElementsByTagName('media_uri')[0].innerHTML;
 
 								for (const videoName of documentXML.getElementsByTagName('main_media')) {
 									videoURLs.push(mediaURI.replace('[MEDIA_FILE]', videoName.innerHTML));
 								}
 							}
-						}
-						catch (error) {
-							consoleError(error, {
-								title: 'Video Code',
-								content: videoInfo.videoCode
-							});
+						} catch (error) {
+							console.error(videoInfo.videoCode + '\n' + error);
 						}
 
 						// 다운로드 버튼 렌더링
@@ -180,3 +172,10 @@ const internalPathFunctions = {
 		observer.observe(document.querySelector('#prjctList'), { attributes: true });
 	}
 };
+
+// Element 생성
+function createElement(elementName, htmlCode) {
+	const newElement = document.createElement(elementName);
+	newElement.innerHTML = htmlCode;
+	return newElement;
+}
