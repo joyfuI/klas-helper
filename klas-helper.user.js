@@ -29,9 +29,6 @@
 				internalPathFunctions[path]();
 			}
 		}
-
-		// 로그인 세션 유지
-		document.head.appendChild(createElement('script', 'setInterval(() => fetch("/"), 600000);'));
 	});
 })();
 
